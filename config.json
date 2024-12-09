@@ -1,0 +1,8 @@
+{
+    "title": "Fotobuch",
+    "thumbnail": "path_to_thumbnail",
+    "input_folders": [
+        ["folder_path", "Your Title", "thumbnail_relative_to_folder_path"]
+    ],
+    "output_folder": "output_folder_path"
+}
