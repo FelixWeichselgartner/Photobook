@@ -5,6 +5,11 @@ from datetime import datetime
 from fpdf import FPDF
 from PIL import Image, ExifTags
 from tqdm import tqdm
+from pdf2image import convert_from_path
+from PIL import Image
+Image.MAX_IMAGE_PIXELS = None
+import glob
+import math
 
 
 def load_config(config_file):
@@ -98,7 +103,7 @@ def chapter_page(pdf, chapter, thumbnail):
     # Add chapter thumbnail
     if thumbnail and os.path.isfile(thumbnail):
         img_width_mm, img_height_mm, processed_thumbnail = process_image_for_pdf(
-            thumbnail, 250, 190, allow_rotation=True
+            thumbnail, 175, 220, allow_rotation=False
         )
         pdf.image(processed_thumbnail, x=(210 - img_width_mm) / 2, y=pdf.get_y(), w=img_width_mm, h=img_height_mm)
         pdf.ln(img_height_mm + 15)
@@ -156,6 +161,36 @@ class CustomPDF(FPDF):
         self.cell(0, 10, f"- {self.page_no()} -", align="C")
 
 
+def compress(pdf_files, dpi, output_path):
+    """
+    Convert PDF pages to images, rotating landscape pages to portrait.
+
+    Parameters:
+        pdf_files (list): List of PDF file paths to process.
+        dpi (int): DPI for image conversion.
+        output_path (str): Path to save the output images.
+    """
+    os.makedirs(output_path, exist_ok=True)
+
+    for pdf_file in tqdm(pdf_files, desc="Converting PDFs to images"):
+        keywords = ['DEL', 'DTP']
+        if any(keyword in pdf_file for keyword in keywords):
+            continue
+
+        # Load the PDF and convert to images
+        images = convert_from_path(pdf_file, dpi=math.ceil(dpi))
+                
+        for i, image in enumerate(images):
+            # Rotate landscape images to portrait if needed
+            if image.width > image.height:
+                image = image.rotate(90, expand=True)
+
+            # Save the image with an incremental name, include the original PDF name
+            base_name = os.path.splitext(os.path.basename(pdf_file))[0]
+            output_filename = os.path.join(output_path, f"{base_name}_page_{i}.png")
+            image.save(output_filename, 'PNG')
+
+
 def main():
     parser = argparse.ArgumentParser(description="Create a photobook from image folders.")
     parser.add_argument("config", type=str, help="Path to the JSON configuration file.")
@@ -165,6 +200,7 @@ def main():
 
     output_pdf = os.path.join(config["output_folder"], "Photobook.pdf")
     resized_folder = os.path.join(config["output_folder"], "Resized_Images")
+    pdf_image_folder = os.path.join(config["output_folder"], "PDF_Images")
 
     os.makedirs(resized_folder, exist_ok=True)
 
@@ -201,9 +237,40 @@ def main():
                 x, y = positions[j]
                 pdf.image(resized_path, x=x, y=y, w=img_width_mm, h=img_height_mm)
 
+    # Compress and append additional PDFs as images
+    if "append_pdfs" in config:
+        compress(config["append_pdfs"], dpi=600, output_path=pdf_image_folder)
+
+        for image_file in tqdm(config['append_pdfs'], desc="Appending PDF images to photobook"):
+            pdf.add_page()
+            
+            b, ext = os.path.splitext(image_file)
+            p = os.path.join(pdf_image_folder, os.path.basename(b) + '_page_0.png')
+            img = Image.open(p)
+
+            # Convert image dimensions from pixels to millimeters (assuming 300 DPI)
+            img_width_mm = img.width * 25.4 / 300
+            img_height_mm = img.height * 25.4 / 300
+
+            # Calculate scaling factor to fit image within the A4 page size (210mm x 297mm) with margins
+            max_width_mm = 180  # Max width with margins
+            max_height_mm = 270  # Max height with margins
+            scaling_factor = min(max_width_mm / img_width_mm, max_height_mm / img_height_mm)
+
+            # Scale dimensions proportionally
+            scaled_width_mm = img_width_mm * scaling_factor
+            scaled_height_mm = img_height_mm * scaling_factor
+
+            # Center the image on the page
+            x_centered = (210 - scaled_width_mm) / 2
+            y_centered = (297 - scaled_height_mm) / 2
+
+            # Add the image to the PDF
+            pdf.image(p, x=x_centered, y=y_centered, w=scaled_width_mm, h=scaled_height_mm)
+
     pdf.output(output_pdf)
-    print(f"Photobook created and saved as PDF: {output_pdf}")
+    print(f"Final Photobook created and saved as PDF: {output_pdf}")
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

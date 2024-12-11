@@ -4,5 +4,8 @@
     "input_folders": [
         ["folder_path", "Your Title", "thumbnail_relative_to_folder_path"]
     ],
-    "output_folder": "output_folder_path"
+    "output_folder": "output_folder_path",
+    "append_pdfs": [
+        "path_to_some_pdf.pdf"
+    ]
 }
