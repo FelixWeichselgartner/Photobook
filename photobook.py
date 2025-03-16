@@ -49,24 +49,35 @@ def get_image_sort_key(file_path):
 
 
 def process_image(file_path, resized_folder, max_width, max_height):
-    """Resize, rotate, and upscale an image."""
-    img = Image.open(file_path)
-
-    if img.height > img.width:
-        img = img.rotate(90, expand=True)
-
-    img_width, img_height = img.size
-
-    if img_width < max_width or img_height < max_height:
-        scaling_factor = max(max_width / img_width, max_height / img_height)
-        img = img.resize(
-            (int(img_width * scaling_factor), int(img_height * scaling_factor)), Image.LANCZOS
-        )
-
-    img.thumbnail((max_width, max_height), Image.LANCZOS)
-
+    """Resize, rotate, and upscale an image only if it has not been processed before."""
     resized_path = os.path.join(resized_folder, os.path.basename(file_path))
-    img.save(resized_path, quality=85)
+
+    # Check if the file has already been processed
+    if os.path.exists(resized_path):
+        print(f"Skipping {file_path}, already processed.")
+        return resized_path  # Return existing file path
+
+    try:
+        img = Image.open(file_path)
+
+        if img.height > img.width:
+            img = img.rotate(90, expand=True)
+
+        img_width, img_height = img.size
+
+        if img_width < max_width or img_height < max_height:
+            scaling_factor = max(max_width / img_width, max_height / img_height)
+            img = img.resize(
+                (int(img_width * scaling_factor), int(img_height * scaling_factor)), Image.LANCZOS
+            )
+
+        img.thumbnail((max_width, max_height), Image.LANCZOS)
+
+        img.save(resized_path, quality=85)
+        print(f"Processed {file_path} -> {resized_path}")
+    except Exception as e:
+        print(f"Error processing {file_path}: {e}")
+
     return resized_path
 
 
@@ -219,7 +230,8 @@ def main():
             for file in os.listdir(folder_path)
             if os.path.isfile(os.path.join(folder_path, file)) and file.lower().endswith(('.jpg', '.jpeg', '.png'))
         ]
-        sorted_images = sorted(image_files, key=get_image_sort_key)
+        #sorted_images = sorted(image_files, key=get_image_sort_key)
+        sorted_images = sorted(image_files, key=lambda x: os.path.basename(x).lower())
 
         for i in tqdm(range(0, len(sorted_images), 2), desc=f"Processing chapter '{heading}'", unit="page"):
             pdf.add_page()
