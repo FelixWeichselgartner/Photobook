@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Review</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; }
+    .wrap { max-width: 1100px; margin: 0 auto; }
+    .topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    .meta { color: #444; word-break: break-all; }
+    .controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    button { padding: 10px 14px; border-radius: 10px; border: 1px solid #ccc; background: #fff; cursor: pointer; }
+    button.primary { border-color: #111; }
+    .pill { padding: 6px 10px; border-radius: 999px; border: 1px solid #ddd; }
+    .pill.good { border-color: #2b7; }
+    .pill.notgood { border-color: #d66; }
+    img { max-width: 100%; height: auto; border-radius: 14px; border: 1px solid #ddd; }
+    .grid { display: grid; grid-template-columns: 1fr; gap: 16px; margin-top: 14px; }
+    a { color: #0645ad; }
+    kbd { border: 1px solid #ccc; border-bottom: 2px solid #bbb; padding: 2px 6px; border-radius: 6px; background: #f7f7f7; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div>
+      <h1 style="margin: 0;">Review</h1>
+      <div class="meta">
+        {{ idx + 1 }} / {{ total }} |
+        Good: {{ good_count }} |
+        <a href="{{ url_for('index') }}">Home</a> |
+        <a href="{{ url_for('list_good') }}">Good list</a>
+      </div>
+    </div>
+
+    <div class="controls">
+      <span id="statusPill" class="pill {{ 'good' if row['good'] else 'notgood' }}">
+        {{ 'GOOD' if row['good'] else 'NOT GOOD' }}
+      </span>
+
+      <button id="toggleBtn" class="primary">
+        Toggle Good (<kbd>G</kbd>)
+      </button>
+
+      <button onclick="goPrev()">Prev (<kbd>←</kbd>)</button>
+      <button onclick="goNext()">Next (<kbd>→</kbd>)</button>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="meta">
+      <div><strong>Path:</strong> {{ row["path"] }}</div>
+      <div><strong>Relative:</strong> {{ row["relpath"] }}</div>
+    </div>
+
+    <div>
+      <img id="img" src="{{ url_for('serve_image', image_id=row['id']) }}" alt="image" />
+    </div>
+  </div>
+</div>
+
+<script>
+  const imageId = {{ row["id"] }};
+  let isGood = {{ 1 if row["good"] else 0 }};
+
+  function setPill() {
+    const pill = document.getElementById("statusPill");
+    pill.textContent = isGood ? "GOOD" : "NOT GOOD";
+    pill.className = "pill " + (isGood ? "good" : "notgood");
+  }
+
+  async function toggleGood() {
+    const target = !isGood;
+    const res = await fetch("{{ url_for('toggle_good') }}", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ image_id: imageId, good: target })
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      alert(data.error || "Toggle failed.");
+      return;
+    }
+    isGood = data.good ? 1 : 0;
+    setPill();
+  }
+
+  function goPrev() {
+    const prev = Math.max(0, {{ idx }} - 1);
+    window.location.href = "{{ url_for('review', idx=0) }}".replace("/0", "/" + prev);
+  }
+
+  function goNext() {
+    const next = Math.min({{ total }} - 1, {{ idx }} + 1);
+    window.location.href = "{{ url_for('review', idx=0) }}".replace("/0", "/" + next);
+  }
+
+  document.getElementById("toggleBtn").addEventListener("click", toggleGood);
+
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowLeft") goPrev();
+    if (e.key === "ArrowRight") goNext();
+    if (e.key === "g" || e.key === "G") toggleGood();
+  });
+
+  setPill();
+</script>
+</body>
+</html>

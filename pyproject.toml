@@ -1,0 +1,18 @@
+[project]
+name = "photobook"
+version = "0.1.0"
+description = "Generate photobooks with per-photo static map images from EXIF GPS data"
+readme = "README.md"
+requires-python = ">=3.10"
+
+dependencies = [
+    "Pillow>=10.0",
+    "staticmap>=0.5",
+    "pillow",
+    "pillow-heif",
+    "flask"
+]
+
+[tool.uv]
+# Ensures uv creates and manages a local .venv automatically
+managed = true

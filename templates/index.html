@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Photobook Picker</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; max-width: 980px; }
+    textarea { width: 100%; height: 140px; }
+    .note { color: #444; }
+    .flash { padding: 10px 12px; margin: 12px 0; border-radius: 8px; }
+    .ok { background: #eef7ee; border: 1px solid #cfe7cf; }
+    .error { background: #fdeeee; border: 1px solid #f2caca; }
+    code { background: #f6f6f6; padding: 2px 6px; border-radius: 6px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 16px; }
+    th, td { text-align: left; border-bottom: 1px solid #ddd; padding: 8px; vertical-align: top; }
+  </style>
+</head>
+<body>
+  <h1>Photobook Picker</h1>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div class="flash {{ category }}">{{ message }}</div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  <p class="note">
+    Output (good copies) folder: <code>{{ output_dir }}</code>
+  </p>
+
+  {% if total is not none %}
+    <p>
+      Database: <strong>{{ total }}</strong> image(s) scanned.
+      Marked good: <strong>{{ good }}</strong>.
+    </p>
+
+    <h2>Scan folders</h2>
+    <form method="post">
+      <label for="folders">Enter absolute folder paths (one per line):</label><br/>
+      <textarea id="folders" name="folders" placeholder="/absolute/path/to/folder1&#10;/absolute/path/to/folder2"></textarea>
+      <br/><br/>
+      <button type="submit">Scan</button>
+      {% if total and total > 0 %}
+        <a style="margin-left: 12px;" href="{{ url_for('review', idx=0) }}">Start / Resume review</a>
+      {% endif %}
+      <a style="margin-left: 12px;" href="{{ url_for('list_good') }}">View good list</a>
+    </form>
+  {% else %}
+    <p>
+      Marked good: <strong>{{ good }}</strong>.
+      <a href="{{ url_for('index') }}">Back</a>
+    </p>
+  {% endif %}
+
+  {% if good_rows %}
+    <h2>Good images</h2>
+    <table>
+      <thead>
+        <tr><th>Original</th><th>Copy</th></tr>
+      </thead>
+      <tbody>
+        {% for r in good_rows %}
+          <tr>
+            <td style="word-break: break-all;">{{ r["path"] }}</td>
+            <td style="word-break: break-all;">{{ r["good_copy_path"] }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+</body>
+</html>
