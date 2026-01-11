@@ -13,14 +13,19 @@ pillow_heif.register_heif_opener()
 
 def convert_one(src: Path, dst: Path, quality: int) -> None:
     with Image.open(src) as im:
-        im = ImageOps.exif_transpose(im)  # applies the 270° rotation correctly
+        exif = im.info.get("exif")  # extract EXIF metadata
 
-        # Convert to RGB for JPEG output
+        im = ImageOps.exif_transpose(im)
+
         if im.mode != "RGB":
             im = im.convert("RGB")
 
         dst.parent.mkdir(parents=True, exist_ok=True)
-        im.save(dst, "JPEG", quality=quality, optimize=True)
+
+        if exif:
+            im.save(dst, "JPEG", quality=quality, optimize=True, exif=exif)
+        else:
+            im.save(dst, "JPEG", quality=quality, optimize=True)
 
 
 def main() -> int:
