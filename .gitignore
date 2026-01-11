@@ -1,3 +1,6 @@
 *.json
 app.db
 good_photobook/
+maps_out/
+config_gps_felix.json
+out/
