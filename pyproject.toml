@@ -12,6 +12,7 @@ dependencies = [
     "pdf2image>=1.17",
     "staticmap>=0.5",
     "pillow-heif>=0.15",
+    "piexif"
 ]
 
 [tool.uv]

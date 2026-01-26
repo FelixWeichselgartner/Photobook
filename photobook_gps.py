@@ -264,7 +264,7 @@ def main():
     pdf.set_auto_page_break(auto=False)
 
     # Title page
-    enhanced_title_page(pdf, config)
+    #enhanced_title_page(pdf, config)
 
     # Page layout: 2 rows × 2 columns per page
     # Each row: [photo | gps-map]
