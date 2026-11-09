@@ -4,3 +4,8 @@ good_photobook/
 maps_out/
 config_gps_felix.json
 out/
+output/
+tmp/
+.venv/
+__pycache__/
+*.py[cod]

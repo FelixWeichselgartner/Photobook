@@ -1,0 +1,13 @@
+{
+    "title": "Mein Fotobuch",
+    "thumbnail": "",
+    "input_folders": [
+        ["bilder/wien", "Wien", ""],
+        ["daten/good_photobook", "Japan", ""]
+    ],
+    "output_folder": "ausgabe/Wien_Japan",
+    "good_database": "daten/app.db",
+    "good_folder": "daten/good_photobook",
+    "reserve_map_space": false,
+    "append_pdfs": []
+}

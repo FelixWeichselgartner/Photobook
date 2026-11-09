@@ -4,6 +4,7 @@ import argparse
 from datetime import datetime
 from typing import Optional, List, Tuple
 from PIL import Image, ExifTags
+from photo_selection import selected_good_images
 
 Image.MAX_IMAGE_PIXELS = None
 VALID_EXTS = (".jpg", ".jpeg", ".png")
@@ -79,7 +80,7 @@ def suggested_rotation_degrees(image_path: str) -> int:
     Suggestion baseline:
     - After applying EXIF orientation:
       portrait -> 0
-      landscape -> 90  (to better fit A4 portrait pages)
+      landscape -> 270  (to better fit A4 portrait pages)
     """
     try:
         with Image.open(image_path) as img:
@@ -105,7 +106,7 @@ def main():
     lines.append("# rotation plan v1")
     lines.append("# format: relative_path | rotation_degrees")
     lines.append("# allowed degrees: 0, 90, 180, 270")
-    lines.append("# edit the degrees manually, then run 02_build_photobook_from_plan.py")
+    lines.append("# edit the degrees manually, then run 02_pdf.py")
     lines.append("")
 
     # build a stable ordered list across all chapters
@@ -113,8 +114,10 @@ def main():
     all_items: List[Tuple[str, str]] = []  # (heading, abs_path)
 
     for folder_path, heading, _thumb_rel in config["input_folders"]:
-        images = collect_images(folder_path)
-        images_sorted = sorted(images, key=lambda p: (get_image_sort_key(p), os.path.basename(p).lower()))
+        images_sorted = selected_good_images(config, folder_path, VALID_EXTS)
+        if images_sorted is None:
+            images = collect_images(folder_path)
+            images_sorted = sorted(images, key=lambda p: (get_image_sort_key(p), os.path.basename(p).lower()))
         for p in images_sorted:
             all_items.append((heading, p))
 
@@ -132,7 +135,7 @@ def main():
         f.write("\n".join(lines))
 
     print(f"Wrote rotation plan: {plan_path}")
-    print("Edit that file, then run: 02_build_photobook_from_plan.py <config>")
+    print("Edit that file, then run: 02_pdf.py <config>")
 
 
 if __name__ == "__main__":

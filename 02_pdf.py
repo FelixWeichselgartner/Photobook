@@ -7,6 +7,7 @@ from typing import Optional, Dict, List
 from fpdf import FPDF
 from PIL import Image, ExifTags
 from tqdm import tqdm
+from photo_selection import selected_good_images
 
 # --- PDF size control ---
 PHOTO_TARGET_DPI = 200          # was effectively ~300
@@ -361,8 +362,10 @@ def main():
         chapter_thumb = os.path.join(folder_path, thumb_rel) if thumb_rel else None
         chapter_page(pdf, heading, chapter_thumb, pdf_temp_folder)
 
-        images = collect_images(folder_path)
-        images_sorted = sorted(images, key=lambda p: (get_image_sort_key(p), os.path.basename(p).lower()))
+        images_sorted = selected_good_images(config, folder_path, VALID_EXTS)
+        if images_sorted is None:
+            images = collect_images(folder_path)
+            images_sorted = sorted(images, key=lambda p: (get_image_sort_key(p), os.path.basename(p).lower()))
 
         for src_path in tqdm(images_sorted, desc=f"Pages: {heading}", unit="page"):
             rel = src_path.replace("\\", "/")
@@ -383,6 +386,10 @@ def main():
 
             pdf.add_page()
 
+            current_map_area_h = map_area_h if gps_cached or config.get("reserve_map_space", True) else 0
+            current_gutter_y = gutter_y if current_map_area_h else 0
+            current_photo_area_h = usable_h - current_map_area_h - current_gutter_y
+
             # --- MAP (top, full width, bounded height) ---
             if gps_cached and mw_px and mh_px:
                 map_w_mm = mw_px * 25.4 / 300
@@ -400,12 +407,12 @@ def main():
             photo_w_mm = pw_px * 25.4 / 300
             photo_h_mm = ph_px * 25.4 / 300
 
-            scale_photo = min(usable_w / photo_w_mm, photo_area_h / photo_h_mm)
+            scale_photo = min(usable_w / photo_w_mm, current_photo_area_h / photo_h_mm)
             w_photo = photo_w_mm * scale_photo
             h_photo = photo_h_mm * scale_photo
 
             x_photo = margin_x + (usable_w - w_photo) / 2
-            y_photo = margin_y + map_area_h + gutter_y + (photo_area_h - h_photo) / 2
+            y_photo = margin_y + current_map_area_h + current_gutter_y + (current_photo_area_h - h_photo) / 2
             pdf.image(photo_cached, x=x_photo, y=y_photo, w=w_photo, h=h_photo)
 
     pdf.output(output_pdf)

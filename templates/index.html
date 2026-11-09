@@ -45,31 +45,9 @@
       <button type="submit">Scan</button>
       {% if total and total > 0 %}
         <a style="margin-left: 12px;" href="{{ url_for('review', idx=0) }}">Start / Resume review</a>
+        <a style="margin-left: 12px;" href="{{ url_for('list_good') }}">Good photos ({{ good }})</a>
       {% endif %}
-      <a style="margin-left: 12px;" href="{{ url_for('list_good') }}">View good list</a>
     </form>
-  {% else %}
-    <p>
-      Marked good: <strong>{{ good }}</strong>.
-      <a href="{{ url_for('index') }}">Back</a>
-    </p>
-  {% endif %}
-
-  {% if good_rows %}
-    <h2>Good images</h2>
-    <table>
-      <thead>
-        <tr><th>Original</th><th>Copy</th></tr>
-      </thead>
-      <tbody>
-        {% for r in good_rows %}
-          <tr>
-            <td style="word-break: break-all;">{{ r["path"] }}</td>
-            <td style="word-break: break-all;">{{ r["good_copy_path"] }}</td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
   {% endif %}
 </body>
 </html>

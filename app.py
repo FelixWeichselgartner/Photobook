@@ -1,18 +1,45 @@
 import os
+import json
 import re
 import sqlite3
 import hashlib
 import shutil
+from datetime import datetime
 from pathlib import Path
 from typing import Iterable, List, Optional, Tuple
 
 from flask import Flask, render_template, request, redirect, url_for, send_file, abort, jsonify, flash
+from PIL import Image
 
 APP_DIR = Path(__file__).resolve().parent
-DB_PATH = APP_DIR / "app.db"
 
-# Where "good" images are copied to:
-GOOD_OUTPUT_DIR = APP_DIR / "good_photobook"
+
+def configured_data_paths() -> tuple[Path, Path]:
+    """Use an environment override or the local, untracked configuration."""
+    override = os.environ.get("PHOTOBOOK_DATA_DIR")
+    if override:
+        directory = Path(override).expanduser()
+        return directory / "app.db", directory / "good_photobook"
+
+    config_path = APP_DIR / "config.json"
+    config = {}
+    if config_path.is_file():
+        with config_path.open(encoding="utf-8") as config_file:
+            config = json.load(config_file)
+
+    def configured_path(key: str, default: Path) -> Path:
+        value = config.get(key)
+        if not value:
+            return default
+        path = Path(value).expanduser()
+        return path if path.is_absolute() else APP_DIR / path
+
+    database = configured_path("good_database", APP_DIR / "app.db")
+    good_folder = configured_path("good_folder", database.parent / "good_photobook")
+    return database, good_folder
+
+
+DB_PATH, GOOD_OUTPUT_DIR = configured_data_paths()
 
 # Allowed image extensions:
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".tif", ".tiff", ".bmp"}
@@ -55,6 +82,51 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_images_good ON images(good);
             """
         )
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS app_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)"
+        )
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(images)")}
+        if "capture_date" not in columns:
+            conn.execute("ALTER TABLE images ADD COLUMN capture_date TEXT")
+
+        # Refresh existing dates once when date extraction logic changes.
+        date_version = conn.execute(
+            "SELECT value FROM app_meta WHERE key = 'capture_date_version'"
+        ).fetchone()
+        if date_version is None or date_version["value"] != "2":
+            rows = conn.execute("SELECT id, path, mtime FROM images").fetchall()
+            for row in rows:
+                conn.execute(
+                    "UPDATE images SET capture_date = ? WHERE id = ?",
+                    (image_capture_date(row["path"], row["mtime"]), row["id"]),
+                )
+            conn.execute(
+                "INSERT INTO app_meta (key, value) VALUES ('capture_date_version', '2') "
+                "ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+            )
+
+
+def image_capture_date(path: str, fallback_mtime: Optional[float]) -> str:
+    """Return an ISO sortable capture date, falling back to file modification time."""
+    try:
+        with Image.open(path) as image:
+            exif = image.getexif()
+            exif_ifd = exif.get_ifd(34665) if hasattr(exif, "get_ifd") else {}
+            for raw in (exif_ifd.get(36867), exif_ifd.get(36868), exif.get(36867), exif.get(36868), exif.get(306)):
+                if raw:
+                    try:
+                        return datetime.strptime(str(raw)[:19], "%Y:%m:%d %H:%M:%S").isoformat(sep=" ")
+                    except ValueError:
+                        continue
+    except (OSError, ValueError):
+        pass
+
+    if fallback_mtime is not None:
+        try:
+            return datetime.fromtimestamp(float(fallback_mtime)).isoformat(sep=" ", timespec="seconds")
+        except (OverflowError, OSError, ValueError):
+            pass
+    return ""
 
 
 # -----------------------------
@@ -123,12 +195,13 @@ def upsert_scan(roots: List[Path]) -> int:
             except OSError:
                 continue
 
+            capture_date = image_capture_date(str(file_path), stat.st_mtime)
             row = conn.execute("SELECT id FROM images WHERE path = ?", (str(file_path),)).fetchone()
             if row is None:
                 conn.execute(
                     """
-                    INSERT INTO images (path, root, relpath, ext, size_bytes, mtime, good, good_copy_path)
-                    VALUES (?, ?, ?, ?, ?, ?, 0, NULL)
+                    INSERT INTO images (path, root, relpath, ext, size_bytes, mtime, good, good_copy_path, capture_date)
+                    VALUES (?, ?, ?, ?, ?, ?, 0, NULL, ?)
                     """,
                     (
                         str(file_path),
@@ -137,6 +210,7 @@ def upsert_scan(roots: List[Path]) -> int:
                         file_path.suffix.lower(),
                         int(stat.st_size),
                         float(stat.st_mtime),
+                        capture_date,
                     ),
                 )
                 added += 1
@@ -145,10 +219,10 @@ def upsert_scan(roots: List[Path]) -> int:
                 conn.execute(
                     """
                     UPDATE images
-                    SET size_bytes = ?, mtime = ?
+                    SET size_bytes = ?, mtime = ?, capture_date = ?
                     WHERE path = ?
                     """,
-                    (int(stat.st_size), float(stat.st_mtime), str(file_path)),
+                    (int(stat.st_size), float(stat.st_mtime), capture_date, str(file_path)),
                 )
     return added
 
@@ -235,9 +309,10 @@ def review(idx: int):
 
         row = conn.execute(
             """
-            SELECT id, path, root, relpath, good, good_copy_path, size_bytes, mtime
+            SELECT id, path, root, relpath, good, good_copy_path, size_bytes, mtime, capture_date
             FROM images
-            ORDER BY path ASC
+            ORDER BY CASE WHEN capture_date IS NULL OR capture_date = '' THEN 1 ELSE 0 END,
+                     capture_date ASC, path ASC
             LIMIT 1 OFFSET ?
             """,
             (idx,),
@@ -325,16 +400,17 @@ def list_good():
     with db() as conn:
         rows = conn.execute(
             """
-            SELECT id, path, root, relpath, good_copy_path
+            SELECT id, path, root, relpath, good_copy_path, capture_date
             FROM images
             WHERE good = 1
-            ORDER BY path ASC
+            ORDER BY CASE WHEN capture_date IS NULL OR capture_date = '' THEN 1 ELSE 0 END,
+                     capture_date ASC, path ASC
             """
         ).fetchall()
-    return render_template("index.html", total=None, good=len(rows), output_dir=str(GOOD_OUTPUT_DIR), good_rows=rows)
+    return render_template("good.html", rows=rows, output_dir=str(GOOD_OUTPUT_DIR))
 
 
 if __name__ == "__main__":
     init_db()
     ensure_good_output_dir()
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=False)  # debug=True would expose the Werkzeug console to the LAN
